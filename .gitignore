@@ -1,0 +1,12 @@
+# PII never enters git history
+inbox/*
+!inbox/.gitkeep
+
+# raw sources may contain client documents: keep them out of the repo by default,
+# move sanitized public sources (laws, AADE pages) into raw/public/ if you want them versioned
+raw/*
+!raw/.gitkeep
+!raw/public/
+
+.DS_Store
+node_modules/
