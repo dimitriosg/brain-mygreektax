@@ -4,6 +4,16 @@ import { createClient } from '@supabase/supabase-js';
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 const bedrock = new BedrockRuntimeClient({ region: "eu-north-1" });
 
+const record = body?.record || body;
+const caseId = record?.case_id;
+const sender = record?.sender; // <--- Get the sender
+
+// SAFETY BREAK: If the AI generated this row, STOP immediately to prevent infinite loops!
+if (sender === 'ai_agent') {
+    console.log("Safety Break: Aborting execution because the event sender is 'ai_agent'.");
+    return { statusCode: 200, body: JSON.stringify({ message: "Loop prevented" }) };
+}
+
 export const handler = async (event) => {
     console.log("Raw API Gateway Event Received:", JSON.stringify(event));
 
