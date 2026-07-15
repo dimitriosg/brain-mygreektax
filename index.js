@@ -25,22 +25,19 @@ export const handler = async (event) => {
         }
 
         if (!caseId) {
-            console.error("Validation failed. Missing case_id inside record object:", JSON.stringify(body));
             return { statusCode: 400, body: JSON.stringify({ error: "Missing case_id parameter" }) };
         }
 
         console.log(`Processing orchestration sequence for Case ID: ${caseId}`);
 
+        // Fetch chronological timeline entries
         const { data: timeline, error: dbError } = await supabase
             .from('case_timeline')
             .select('*')
             .eq('case_id', caseId)
             .order('created_at', { ascending: true });
 
-        if (dbError) {
-            console.error("Supabase Database fetch operation failed:", dbError);
-            throw dbError;
-        }
+        if (dbError) throw dbError;
 
         let formattedTimeline = "### Persistent Case Timeline\n\n";
         timeline.forEach(entry => {
@@ -49,55 +46,77 @@ export const handler = async (event) => {
             formattedTimeline += `**[${entry.sender.toUpperCase()} - ${entry.event_type}]:**\n${messageText}\n\n---\n\n`;
         });
 
-        console.log("Assembled Timeline context payload for Bedrock Engine:\n", formattedTimeline);
+        // REFACTORED SYSTEM PROMPT: Demanding a strict structural JSON output layout
+        const systemPrompt = `You are the MyGreekTax Brain orchestrator. Review the persistent timeline history and analyze the tax context. 
+        You must return your output ONLY as a valid JSON object matching this schema layout. Do not include markdown formatting like \`\`\`json blocks outside the text.
 
-        const systemPrompt = "You are the MyGreekTax Brain orchestrator. Review this persistent timeline history, analyze the context, and draft the next required response. Separate outputs strictly into [READY TO SEND] and [INTERNAL NOTES].";
-        
+        {
+          "proposed_draft": "Your client-ready professional email text response here using appropriate spacing and markdown newlines.",
+          "internal_notes": "Your private executive technical tax notes, compliance alerts, missing data points, and risk warnings for the internal operations team here."
+        }`;
+
         console.log("Invoking serverless model endpoint...");
 
         const command = new ConverseCommand({
             modelId: "eu.anthropic.claude-sonnet-4-6",
             messages: [{ role: "user", content: [{ text: formattedTimeline }] }],
-            system: [{ text: systemPrompt }]
+            system: [{ text: systemPrompt }],
+            inferenceConfig: {
+                maxTokens: 4000,
+                temperature: 0.1 // Lowered temperature to enforce strict JSON syntax tracking
+            }
         });
 
         const response = await bedrock.send(command);
         
-        // FIXED FIXTURE: Correct array extraction fallback logic for Bedrock Converse response parsing
-        let aiOutput = "";
+        let aiRawText = "";
         if (response.output?.message?.content?.[0]?.text) {
-            aiOutput = response.output.message.content[0].text;
-        } else if (typeof response.output?.message?.content === 'string') {
-            aiOutput = response.output.message.content;
+            aiRawText = response.output.message.content[0].text;
         } else {
-            aiOutput = JSON.stringify(response.output?.message?.content || "Error: No text generated");
+            throw new Error("No textual parameters returned from Bedrock service.");
         }
-        
-        console.log("AI Response successfully compiled:", aiOutput);
 
-        console.log("Writing response entry back to Supabase...");
-        const { error: insertError } = await supabase
-            .from('case_timeline')
-            .insert({
+        console.log("Raw Text Output received from AI:", aiRawText);
+
+        // Clean up any loose wrapper fragments the AI might have accidentally appended
+        const cleanJsonString = aiRawText.substring(aiRawText.indexOf("{"), aiRawText.lastIndexOf("}") + 1);
+        const structuredOutput = JSON.parse(cleanJsonString);
+
+        console.log("Successfully parsed AI output into JSON variables.");
+
+        // 1. Log the structured action history back onto the main case timeline
+        await supabase.from('case_timeline').insert({
+            case_id: caseId,
+            event_type: 'ai_draft_suggested',
+            sender: 'ai_agent',
+            payload: { 
+                text: structuredOutput.proposed_draft,
+                notes: structuredOutput.internal_notes
+            }
+        });
+
+        // 2. UPSERT the latest values straight into your review desk tracking layer
+        // This ensures your "Pending Approvals View" always displays the most updated draft version
+        const { error: upsertError } = await supabase
+            .from('case_drafts')
+            .upsert({
                 case_id: caseId,
-                event_type: 'ai_draft_suggested',
-                sender: 'ai_agent',
-                payload: { text: aiOutput }
-            });
+                proposed_draft: structuredOutput.proposed_draft,
+                internal_notes: structuredOutput.internal_notes,
+                is_approved: false,
+                last_updated: new Date().toISOString()
+            }, { onConflict: 'case_id' }); // Overwrites the existing open draft for this case
 
-        if (insertError) {
-            console.error("Failed to append AI agent row back to Supabase:", insertError);
-            throw insertError;
+        if (upsertError) {
+            console.error("Failed to update case_drafts review index table:", upsertError);
+            throw upsertError;
         }
 
-        console.log("Orchestration pipeline execution successful.");
+        console.log("Structured review database tables populated successfully.");
         return { statusCode: 200, body: JSON.stringify({ status: "Success" }) };
 
     } catch (err) {
         console.error("Critical Brain pipeline runtime crash:", err.message);
-        return {
-            statusCode: 500,
-            body: JSON.stringify({ error: "Internal processing crash", details: err.message })
-        };
+        return { statusCode: 500, body: JSON.stringify({ error: "Processing failed", details: err.message }) };
     }
 };
