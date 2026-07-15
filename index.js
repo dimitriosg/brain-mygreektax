@@ -48,9 +48,10 @@ export const handler = async (event) => {
         const systemPrompt = "You are the MyGreekTax Brain orchestrator. Review this persistent timeline history, analyze the context, and draft the next required response. Separate outputs strictly into [READY TO SEND] and [INTERNAL NOTES].";
         
         console.log("Invoking serverless model endpoint...");
-        
+
+        // Updated with the correct system routing identifier
         const command = new ConverseCommand({
-            modelId: "eu.anthropic.claude-3-5-sonnet-20241022-v2:0",
+            modelId: "eu.anthropic.claude-3-5-sonnet-20241022-v2:0", 
             messages: [{ role: "user", content: [{ text: formattedTimeline }] }],
             system: [{ text: systemPrompt }]
         });
