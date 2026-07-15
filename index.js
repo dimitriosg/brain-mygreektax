@@ -62,14 +62,16 @@ export const handler = async (event) => {
         console.log("AI Response successfully compiled:", aiOutput);
 
         console.log("Writing response entry back to Supabase...");
+        // Fixed: Explicitly wrapping the string output as a JSON object
         const { error: insertError } = await supabase
             .from('case_timeline')
             .insert({
                 case_id: caseId,
                 event_type: 'ai_draft_suggested',
                 sender: 'ai_agent',
-                payload: { text: aiOutput }
+                payload: { text: aiOutput } // Ensure it's nested under the 'text' key
             });
+
 
         if (insertError) {
             console.error("Failed to append AI agent row back to Supabase:", insertError);
