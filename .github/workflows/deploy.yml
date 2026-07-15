@@ -13,11 +13,11 @@ jobs:
     - name: Checkout Source Code
       uses: actions/checkout@v4
 
-    # Fixed clean step setup with the correct singular key
+    # Upgraded runner setup target to Node 24
     - name: Set up Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: '20'
+        node-version: '24'
 
     - name: Install Dependencies
       run: |
