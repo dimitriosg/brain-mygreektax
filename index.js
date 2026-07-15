@@ -50,7 +50,7 @@ export const handler = async (event) => {
         console.log("Invoking serverless model endpoint...");
         
         const command = new ConverseCommand({
-            modelId: "eu.anthropic.claude-3-5-sonnet-20241022-v2:0", 
+            modelId: "eu.anthropic.claude-3-5-sonnet-20241022-v2:0",
             messages: [{ role: "user", content: [{ text: formattedTimeline }] }],
             system: [{ text: systemPrompt }]
         });
