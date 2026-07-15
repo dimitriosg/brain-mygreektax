@@ -51,7 +51,7 @@ export const handler = async (event) => {
 
         // Updated with the correct system routing identifier
         const command = new ConverseCommand({
-            modelId: "eu.anthropic.claude-3-5-sonnet-20241022-v2:0", 
+            modelId: "eu.anthropic.claude-sonnet-5-20260630-v1:0",
             messages: [{ role: "user", content: [{ text: formattedTimeline }] }],
             system: [{ text: systemPrompt }]
         });
