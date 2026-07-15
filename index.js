@@ -4,16 +4,6 @@ import { createClient } from '@supabase/supabase-js';
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 const bedrock = new BedrockRuntimeClient({ region: "eu-north-1" });
 
-const record = body?.record || body;
-const caseId = record?.case_id;
-const sender = record?.sender; // <--- Get the sender
-
-// SAFETY BREAK: If the AI generated this row, STOP immediately to prevent infinite loops!
-if (sender === 'ai_agent') {
-    console.log("Safety Break: Aborting execution because the event sender is 'ai_agent'.");
-    return { statusCode: 200, body: JSON.stringify({ message: "Loop prevented" }) };
-}
-
 export const handler = async (event) => {
     console.log("Raw API Gateway Event Received:", JSON.stringify(event));
 
@@ -27,6 +17,13 @@ export const handler = async (event) => {
 
         const record = body?.record || body;
         const caseId = record?.case_id;
+        const sender = record?.sender; // <--- Safely extracted inside the active function scope
+
+        // CORRECT PLACEMENT: The return statement is now valid because it is inside the function body
+        if (sender === 'ai_agent') {
+            console.log("Safety Break: Aborting execution because the event sender is 'ai_agent'.");
+            return { statusCode: 200, body: JSON.stringify({ message: "Loop prevented" }) };
+        }
 
         if (!caseId) {
             console.error("Validation failed. Missing case_id inside record object:", JSON.stringify(body));
@@ -59,7 +56,6 @@ export const handler = async (event) => {
         
         console.log("Invoking serverless model endpoint...");
 
-        // Updated with the correct system routing identifier
         const command = new ConverseCommand({
             modelId: "eu.anthropic.claude-sonnet-4-6",
             messages: [{ role: "user", content: [{ text: formattedTimeline }] }],
@@ -72,16 +68,14 @@ export const handler = async (event) => {
         console.log("AI Response successfully compiled:", aiOutput);
 
         console.log("Writing response entry back to Supabase...");
-        // Fixed: Explicitly wrapping the string output as a JSON object
         const { error: insertError } = await supabase
             .from('case_timeline')
             .insert({
                 case_id: caseId,
                 event_type: 'ai_draft_suggested',
                 sender: 'ai_agent',
-                payload: { text: aiOutput } // Ensure it's nested under the 'text' key
+                payload: { text: aiOutput }
             });
-
 
         if (insertError) {
             console.error("Failed to append AI agent row back to Supabase:", insertError);
