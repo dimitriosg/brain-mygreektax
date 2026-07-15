@@ -1,6 +1,11 @@
 import { BedrockRuntimeClient, ConverseCommand } from "@aws-sdk/client-bedrock-runtime";
 import { createClient } from '@supabase/supabase-js';
 
+const authHeader = event.headers['x-api-secret'] || event.headers['X-Api-Secret'];
+if (authHeader !== process.env.WEBHOOK_SECRET) {
+    return { statusCode: 401, body: JSON.stringify({ error: "Unauthorized access" }) };
+}
+
 // Initialize external clients outside the handler to leverage AWS container reuse
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 const bedrock = new BedrockRuntimeClient({ region: "eu-north-1" });
