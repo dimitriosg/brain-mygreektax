@@ -17,9 +17,8 @@ export const handler = async (event) => {
 
         const record = body?.record || body;
         const caseId = record?.case_id;
-        const sender = record?.sender; // <--- Safely extracted inside the active function scope
+        const sender = record?.sender;
 
-        // CORRECT PLACEMENT: The return statement is now valid because it is inside the function body
         if (sender === 'ai_agent') {
             console.log("Safety Break: Aborting execution because the event sender is 'ai_agent'.");
             return { statusCode: 200, body: JSON.stringify({ message: "Loop prevented" }) };
@@ -63,7 +62,16 @@ export const handler = async (event) => {
         });
 
         const response = await bedrock.send(command);
-        const aiOutput = response.output.message.content.text;
+        
+        // FIXED FIXTURE: Correct array extraction fallback logic for Bedrock Converse response parsing
+        let aiOutput = "";
+        if (response.output?.message?.content?.[0]?.text) {
+            aiOutput = response.output.message.content[0].text;
+        } else if (typeof response.output?.message?.content === 'string') {
+            aiOutput = response.output.message.content;
+        } else {
+            aiOutput = JSON.stringify(response.output?.message?.content || "Error: No text generated");
+        }
         
         console.log("AI Response successfully compiled:", aiOutput);
 
