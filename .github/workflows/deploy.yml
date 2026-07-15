@@ -21,22 +21,14 @@ jobs:
       with:
         node-version: '24'
 
-    - name: Initialize Fallback Files
-      run: |
-        if [ ! -f package.json ]; then
-          echo '{"name":"brain","type":"module","dependencies":{"@aws-sdk/client-bedrock-runtime":"^3.0.0","@supabase/supabase-js":"^2.0.0"}}' > package.json
-        fi
-        if [ ! -f index.js ] && [ ! -f index.mjs ]; then
-          echo 'export const handler = async (e) => { return { statusCode: 200, body: "Hello" } };' > index.js
-        fi
-
     - name: Install Dependencies
       run: |
         npm install --production
 
+    # Zips only your production files cleanly
     - name: Package Deployment Archive
       run: |
-        zip -r deployment.zip . -x "*.git*" "*.github*"
+        zip -r deployment.zip index.js package.json node_modules
 
     - name: Configure AWS Credentials
       uses: aws-actions/configure-aws-credentials@v4
