@@ -5,7 +5,6 @@ on:
     branches:
       - main
 
-# Set environment keys globally across the build process
 env:
   ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: 'true'
 
@@ -22,7 +21,6 @@ jobs:
       with:
         node-version: '24'
 
-    # Ensures package files exist so npm ci doesn't throw a code 1 crash
     - name: Initialize Fallback Files
       run: |
         if [ ! -f package.json ]; then
@@ -36,12 +34,11 @@ jobs:
       run: |
         npm install --production
 
-    # Uses a safe zip target selector that wont crash if folders are missing
     - name: Package Deployment Archive
       run: |
         zip -r deployment.zip . -x "*.git*" "*.github*"
 
-     Cav-name: Configure AWS Credentials
+    - name: Configure AWS Credentials
       uses: aws-actions/configure-aws-credentials@v4
       with:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
