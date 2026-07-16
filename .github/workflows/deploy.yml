@@ -5,9 +5,6 @@ on:
     branches:
       - main
 
-env:
-  ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: 'true'
-
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -19,16 +16,15 @@ jobs:
     - name: Set up Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: '24'
+        node-version: '22'
 
-    - name: Install Dependencies
-      run: |
-        npm install --production
+    - name: Install production dependencies
+      working-directory: src
+      run: npm install --omit=dev
 
-    # Zips only your production files cleanly
-    - name: Package Deployment Archive
-      run: |
-        zip -r deployment.zip index.js package.json node_modules
+    - name: Package deployment archive
+      working-directory: src
+      run: zip -r ../deployment.zip index.js package.json node_modules
 
     - name: Configure AWS Credentials
       uses: aws-actions/configure-aws-credentials@v4
