@@ -83,6 +83,7 @@ function formatKnowledgeBase(rows) {
     let totalChars = output.length;
 
     for (const row of rows) {
+        /*
         const staleFlag = isPastReviewDate(row.review_by)
             ? "\nSTATUS: NEEDS RE-VERIFICATION. Do not state this as fact. Treat it only as a cue to ask the licensed partner to confirm.\n"
             : "\nSTATUS: APPROVED CANONICAL REFERENCE.\n";
@@ -93,6 +94,14 @@ function formatKnowledgeBase(rows) {
             `Source: ${asText(row.source || "Internal approved knowledge")}\n` +
             staleFlag +
             `${asText(row.content)}\n\n---\n\n`;
+        */
+        /// <<<--- TEMP FIX
+        const entry =
+            `## ${asText(row.title || row.slug || "Untitled knowledge entry")}\n` +
+            `Category: ${asText(row.category || "general")}\n` +
+            `Visibility: ${asText(row.visibility || "client_safe")}\n` +
+            `${asText(row.content)}\n\n---\n\n`;
+        /// <<<--- TEMP FIX <ENDS> HERE.
 
         if (totalChars + entry.length > KB_MAX_CHARS) {
             output +=
@@ -319,6 +328,7 @@ export const handler = async (event) => {
 
         console.log(`Processing Brain sequence for case ${caseId}.`);
 
+        /*
         const [{ data: timeline, error: timelineError }, { data: knowledge, error: knowledgeError }] =
             await Promise.all([
                 supabase
@@ -329,13 +339,31 @@ export const handler = async (event) => {
                 supabase
                     .from("knowledge_base")
                     // .select("id, slug, title, content, category, source, review_by, updated_at")
-                    .select("id, title, content, category, source, review_by, updated_at")
+                    // .select("id, title, content, category, source, review_by, updated_at")
+                    .select("*")
                     .eq("status", "canonical")
                     .eq("is_active", true)
                     .eq("visibility", "client_safe")
                     .order("updated_at", { ascending: false })
                     .limit(KB_MAX_ENTRIES),
             ]);
+        */
+        const [{ data: timeline, error: timelineError }, { data: knowledge, error: knowledgeError }] =
+            await Promise.all([
+                supabase
+                    .from("case_timeline")
+                    .select("*")
+                    .eq("case_id", caseId)
+                    .order("created_at", { ascending: true }),
+                supabase
+                    .from("knowledge_base")
+                    .select("id, slug, title, content, category, visibility, is_active, updated_at")
+                    .eq("is_active", true)
+                    .eq("visibility", "client_safe")
+                    .order("updated_at", { ascending: false })
+                    .limit(KB_MAX_ENTRIES),
+            ]);
+        // <<<--- TEMP FIX
 
         if (timelineError) {
             throw new Error(`Failed to load case timeline: ${timelineError.message}`);
@@ -417,6 +445,7 @@ export const handler = async (event) => {
             // <-- OLD ONE ENDS.
             ///////
             // <<--- NEW ONE BEGINS
+            /*
             knowledge_entries_used: (knowledge || []).map((entry) => ({
                 id: entry.id,
                 title: entry.title,
@@ -424,8 +453,17 @@ export const handler = async (event) => {
                 review_by: entry.review_by,
                 needs_reverification: isPastReviewDate(entry.review_by),
             })),
+            */
             // <<--- NEW ONE ENDS.
             ///////
+            /// <<<--- TEMP FIX
+            knowledge_entries_used: (knowledge || []).map((entry) => ({
+                id: entry.id,
+                slug: entry.slug || null,
+                title: entry.title || null,
+                updated_at: entry.updated_at || null,
+                visibility: entry.visibility || null,
+            })),
         };
 
         const { error: timelineInsertError } = await supabase
