@@ -240,7 +240,9 @@ export const handler = async (event) => {
                 };
             }
         }
-
+        /////////////////////////////////////
+        // <--- old one BEGINS here.
+        /* 
         let body;
         try {
             body =
@@ -255,6 +257,33 @@ export const handler = async (event) => {
         }
 
         const record = body?.record || body;
+        */
+        // <--- old one ENDS here.
+        /////////////////////////////////////
+
+        ////////////////////////////////////
+        // <<--- NEW ONE <BEGINS> HERE
+        let body;
+        
+        try {
+            if (typeof event?.body === "string") {
+                body = JSON.parse(event.body);
+            } else if (event?.body && typeof event.body === "object") {
+                body = event.body;
+            } else {
+                body = event;
+            }
+        } catch {
+            return {
+                statusCode: 400,
+                body: JSON.stringify({ error: "Invalid JSON body" }),
+            };
+        }
+        
+        const record = body?.record || body;
+        // <<--- NEW ONE <ENDS> HERE
+        ////////////////////////////////////
+        
         const caseId = record?.case_id;
         const sender = record?.sender;
         const caseSerialId = record?.case_serial_id ?? null;
