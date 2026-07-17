@@ -328,7 +328,8 @@ export const handler = async (event) => {
                     .order("created_at", { ascending: true }),
                 supabase
                     .from("knowledge_base")
-                    .select("id, slug, title, content, category, source, review_by, updated_at")
+                    // .select("id, slug, title, content, category, source, review_by, updated_at")
+                    .select("id, title, content, category, source, review_by, updated_at")
                     .eq("status", "canonical")
                     .eq("is_active", true)
                     .eq("visibility", "client_safe")
@@ -341,6 +342,7 @@ export const handler = async (event) => {
         }
 
         if (knowledgeError) {
+            console.error("Knowledge base query error:", knowledgeError);
             throw new Error(
                 `Failed to load approved knowledge base. Drafting stopped safely: ${knowledgeError.message}`,
             );
@@ -402,12 +404,28 @@ export const handler = async (event) => {
             needs_partner_input: structuredOutput.needs_partner_input,
             partner_draft_subject: structuredOutput.partner_draft_subject,
             partner_draft_body: structuredOutput.partner_draft_body,
+            ///////
+            // <-- OLD ONE BEGINS
+            /*
             knowledge_entries_used: (knowledge || []).map((entry) => ({
                 slug: entry.slug,
                 updated_at: entry.updated_at,
                 review_by: entry.review_by,
                 needs_reverification: isPastReviewDate(entry.review_by),
             })),
+            */
+            // <-- OLD ONE ENDS.
+            ///////
+            // <<--- NEW ONE BEGINS
+            knowledge_entries_used: (knowledge || []).map((entry) => ({
+                id: entry.id,
+                title: entry.title,
+                updated_at: entry.updated_at,
+                review_by: entry.review_by,
+                needs_reverification: isPastReviewDate(entry.review_by),
+            })),
+            // <<--- NEW ONE ENDS.
+            ///////
         };
 
         const { error: timelineInsertError } = await supabase
