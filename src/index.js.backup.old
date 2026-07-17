@@ -72,9 +72,8 @@ export const handler = async (event) => {
         const sender = record?.sender;
         const caseSerialId = record?.case_serial_id ?? null;
 
-        const NON_TRIGGERING_SENDERS = new Set(["ai_agent", "internal"]);
-        if (NON_TRIGGERING_SENDERS.has(sender)) {
-            console.log(`Safety Break: sender '${sender}' does not trigger drafting.`);
+        if (sender === "ai_agent") {
+            console.log("Safety Break: Aborting execution because the event sender is 'ai_agent'.");
             return { statusCode: 200, body: JSON.stringify({ message: "Loop prevented" }) };
         }
 
