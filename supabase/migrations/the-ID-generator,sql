@@ -1,0 +1,89 @@
+-- resolve_case_for_inbound: the single source of truth for "which case does this
+-- email belong to". Given a sender email, it finds or creates the customer, then
+-- either attaches to their open case or opens a new one, and returns the case ID.
+-- Race-safe via advisory locks. Lives in one place so the logic can never drift.
+
+create or replace function resolve_case_for_inbound(
+  p_email text,
+  p_name text default null,
+  p_nationality text default null
+)
+returns table (
+  out_client_id uuid,
+  out_client_code text,
+  out_case_serial_id text,
+  out_case_number int,
+  out_is_new_customer boolean,
+  out_is_new_case boolean
+)
+language plpgsql
+as $$
+declare
+  v_email text := lower(trim(p_email));
+  v_client clients%rowtype;
+  v_is_new_customer boolean := false;
+  v_next_clt int;
+  v_bare_clt text;
+  v_open_case brain_conversations%rowtype;
+  v_next_case_num int;
+  v_serial text;
+begin
+  if v_email is null or v_email = '' then
+    raise exception 'resolve_case_for_inbound requires a non-empty email';
+  end if;
+
+  select * into v_client
+  from clients
+  where lower(trim(email)) = v_email
+  limit 1;
+
+  if not found then
+    perform pg_advisory_xact_lock(hashtext('clt_number_seq'));
+
+    select coalesce(max((substring(client_code from 'CLT0*([0-9]+)'))::int), 0) + 1
+      into v_next_clt
+    from clients
+    where client_code ~ '^CLT[0-9]';
+
+    insert into clients (client_code, full_name, email, nationality, status)
+    values ('CLT' || lpad(v_next_clt::text, 4, '0'), p_name, v_email, p_nationality, 'Prospect')
+    returning * into v_client;
+
+    v_is_new_customer := true;
+  end if;
+
+  v_bare_clt := substring(v_client.client_code from '(CLT[0-9]+)');
+
+  perform pg_advisory_xact_lock(hashtext('case_seq_' || v_client.id::text));
+
+  select * into v_open_case
+  from brain_conversations
+  where client_id = v_client.id
+    and coalesce(stage, 'Potential') not in ('Complete', 'Lost')
+  order by case_number desc nulls last
+  limit 1;
+
+  if found then
+    return query select v_client.id, v_client.client_code,
+                        v_open_case.case_serial_id, v_open_case.case_number,
+                        v_is_new_customer, false;
+    return;
+  end if;
+
+  select coalesce(max(case_number), 0) + 1 into v_next_case_num
+  from brain_conversations
+  where client_id = v_client.id;
+
+  v_serial := 'MGT-CS' || lpad(v_next_case_num::text, 3, '0') || '-' || v_bare_clt;
+
+  insert into brain_conversations
+    (customer_id, customer_email, client_id, case_serial_id, case_number,
+     stage, conversation_type, status)
+  values
+    (v_client.client_code, v_email, v_client.id, v_serial, v_next_case_num,
+     'Potential', 'lead', 'active');
+
+  return query select v_client.id, v_client.client_code, v_serial,
+                      v_next_case_num, v_is_new_customer, true;
+end;
+$$;
