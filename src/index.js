@@ -347,8 +347,9 @@ export const handler = async (event) => {
         });
 
         const response = await bedrock.send(command);
-        // const aiRawText = response.output?.message?.content?.[0]?.text;
-        const aiRawText = response.content.find(b => b.type === "text")?.text;
+        // NEW FIX
+        const messageContent = response.output?.message?.content ?? [];
+        const aiRawText = messageContent.find((b) => b.text)?.text;
 
         if (!aiRawText) {
             throw new Error("No textual output returned from Bedrock.");
