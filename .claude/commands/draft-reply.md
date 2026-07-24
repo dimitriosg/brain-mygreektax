@@ -6,6 +6,7 @@ Draft an email. Input: $ARGUMENTS (who it is for, the thread or context, and the
 
 Follow CLAUDE.md rules strictly. Sequence:
 
+0. Check the stage gate (R7). If the case is in Quoted and the deposit is not confirmed, a document checklist, methodology explanation, or partner ανάθεση cannot be drafted. Say so and draft the permitted alternative instead. See `.claude/skills/mgt-stage-gate/`.
 1. Classify the recipient: CLIENT (expat, English) or PARTNER/CANDIDATE (Greek accountant, Greek).
 2. Pull what is relevant: matching case patterns from `cases/`, rules and SOPs from `wiki/`, service definitions from `wiki/services/`. For client quotes, retail prices from `pricing/price-table.md`. For partner drafts, NEVER open retail figures into the draft (rule R2).
 3. Check the complexity triggers (R3). If any apply, the client wording stays provisional and the internal notes list exactly what the partner must confirm.
