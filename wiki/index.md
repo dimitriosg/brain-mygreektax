@@ -14,6 +14,7 @@ CANONICAL: verified, safe to rely on. DRAFT: unverified, needs review by Δημ�
 ## Currently canonical
 - sops/enarxi-requirement.md
 - sops/exousiodotisi-workflow.md
+- sops/required-fields-declaration-poa.md
 - style/email-style-guide.md
 
 ## Currently draft
