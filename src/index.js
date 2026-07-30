@@ -624,6 +624,24 @@ export const handler = async (event) => {
         }
 
         if (mode === "partner") {
+            // Fail closed without a recipient. R6 scoping depends on knowing
+            // which partner this is for: with no address, formatPartnerTimeline
+            // cannot filter and the draft would be written unattributed, which
+            // the desk then cannot check against the selected recipient.
+            //
+            // Refused here rather than constrained in the database, so the
+            // caller gets a clear reason instead of a constraint violation from
+            // deep inside the write, and before a Bedrock call is spent.
+            if (!partnerEmail) {
+                console.warn("Partner mode called without partner_email. Refusing to draft.");
+                return {
+                    statusCode: 400,
+                    body: JSON.stringify({
+                        error: "partner_email is required for mode \"partner\"",
+                    }),
+                };
+            }
+
             // The case code is authoritative from the database, not from the
             // request, and not from whatever an email body happened to quote.
             const { data: convRow } = await supabase
