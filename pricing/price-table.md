@@ -4,7 +4,7 @@ Status: Chrysostomos wholesale CONFIRMED (signed Annex A, 07/05/2026). Retail fi
 Last reviewed: 2026-07-13
 Partner: this table tracks Chrysostomos Ftaklakis only. Other partners are tracked separately.
 
-Chrysostomos wholesale figures come from the signed Συμφωνητικό Συνεργασίας and Παράρτημα Α (Class B license 0062851, AFM 131001790, ΔΟΥ Ρόδου 7542). Reverse charge VAT applies per article 7.4. Retail figures below are drawn from the anonymized quote register where a real quote exists; where only rate-card list pricing exists, it is marked "list".
+Chrysostomos wholesale figures come from the signed Συμφωνητικό Συνεργασίας and Παράρτημα Α. The partner's licence number, AFM and ΔΟΥ are held in that agreement and are deliberately not repeated here, since this repository is public. Reverse charge VAT applies per article 7.4. Retail figures below are drawn from the anonymized quote register where a real quote exists; where only rate-card list pricing exists, it is marked "list".
 
 ## Correction: AFM registration is NOT negative margin
 
