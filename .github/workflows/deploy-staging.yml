@@ -19,8 +19,10 @@ on:
       - staging
   workflow_dispatch:
 
-# Kept identical to deploy.yml, per the note above.
+# Kept identical to deploy.yml, per the note above. id-token: write is what
+# lets the runner request the OIDC token AWS exchanges for credentials.
 permissions:
+  id-token: write
   contents: read
 
 jobs:
@@ -44,11 +46,13 @@ jobs:
       working-directory: src
       run: zip -r ../deployment.zip index.js package.json node_modules
 
+    # OIDC, same role as production. The role's policy names both functions,
+    # and this workflow's only AWS call names the staging one, so the branch
+    # separation still decides which function is touched.
     - name: Configure AWS Credentials
       uses: aws-actions/configure-aws-credentials@v4
       with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        role-to-assume: arn:aws:iam::552648196447:role/GitHubActionsDeployBrain
         aws-region: eu-north-1
 
     - name: Push Zip to AWS Lambda
