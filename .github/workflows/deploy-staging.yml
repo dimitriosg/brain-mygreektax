@@ -19,6 +19,10 @@ on:
       - staging
   workflow_dispatch:
 
+# Kept identical to deploy.yml, per the note above.
+permissions:
+  contents: read
+
 jobs:
   deploy:
     runs-on: ubuntu-latest

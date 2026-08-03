@@ -5,6 +5,12 @@ on:
     branches:
       - main
 
+# The workflow only reads the repo and calls AWS. Without this block the
+# default GITHUB_TOKEN carries write scope on contents, packages, issues and
+# more for every run, which this deploy never needs.
+permissions:
+  contents: read
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
