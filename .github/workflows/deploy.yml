@@ -5,6 +5,16 @@ on:
     branches:
       - main
 
+# id-token: write lets the runner request a short-lived OIDC token, which is
+# what AWS exchanges for temporary credentials. It grants nothing in the repo.
+#
+# contents: read is the rest of the story: without this block the default
+# GITHUB_TOKEN carries write scope on contents, packages, issues and more for
+# every run, which this deploy never needs.
+permissions:
+  id-token: write
+  contents: read
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -26,11 +36,14 @@ jobs:
       working-directory: src
       run: zip -r ../deployment.zip index.js package.json node_modules
 
+    # OIDC: no long-lived keys. GitHub mints a token scoped to this repo, AWS
+    # trades it for credentials that expire when the run ends. The role is
+    # assumable only from repo:dimitriosg/brain-mygreektax and can do exactly
+    # one thing: lambda:UpdateFunctionCode on the two brain functions.
     - name: Configure AWS Credentials
       uses: aws-actions/configure-aws-credentials@v4
       with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        role-to-assume: arn:aws:iam::552648196447:role/GitHubActionsDeployBrain
         aws-region: eu-north-1
 
     - name: Push Zip to AWS Lambda
