@@ -6,9 +6,12 @@ name: Deploy MyGreekTax Brain to AWS Lambda (staging)
 # change this file with it.
 #
 # Requires the Lambda function mygreektax-brain-staging to exist in
-# eu-north-1, with its own execution role and Bedrock access. Until it does,
-# this workflow only runs when someone pushes to the staging branch, and it
-# fails at the last step without touching production.
+# eu-north-1, with its own execution role and Bedrock access.
+#
+# It runs on a push to the staging branch, or on a manual dispatch from the
+# Actions tab, where the ref you pick is the code that gets deployed. It
+# cannot run on main, and its only AWS call names the staging function, so it
+# cannot reach production either way.
 
 on:
   push:
