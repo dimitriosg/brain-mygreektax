@@ -164,9 +164,11 @@ create unique index if not exists brain_events_unique_provider_message_idx
 -- were created in the SQL editor. Ordered by foreign-key dependency so the file
 -- applies cleanly to an empty database.
 --
--- RLS is intentionally NOT enabled here: production has it disabled on these,
--- and this file's job is to reproduce production, not to change it. Tightening
--- them is separate work.
+-- RLS: production has row level security enabled on every public table,
+-- including these (deny-all where no policy exists; the service role bypasses
+-- RLS). An earlier version of this comment claimed it was disabled, which was
+-- wrong. Enablement lives in 20260731120000_baseline_handmade_objects_and_rls
+-- so the two files stay consistent with the order they were applied in.
 -- ============================================================================
 
 create table if not exists public.accountants (
