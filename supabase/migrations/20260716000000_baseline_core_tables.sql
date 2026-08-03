@@ -1,10 +1,16 @@
 -- ============================================================================
--- Baseline: core Brain tables (clients, brain_conversations, brain_events)
+-- Baseline: the 16 production tables that no migration creates
 -- ============================================================================
--- These three tables were created directly in the Supabase SQL editor and were
--- never committed as migration files. Every later migration assumes they exist,
--- so the migration chain could not rebuild the database from empty. This file
--- closes that gap.
+-- These tables were created directly in the Supabase SQL editor and were never
+-- committed as migration files. Sixteen of production's forty public tables are
+-- in this state, so the migration chain could not rebuild the database from
+-- empty. This file closes that gap.
+--
+-- The first three below (clients, brain_conversations, brain_events) are the
+-- ones that break the chain outright: 20260717000000_brain_session_consolidated
+-- alters brain_conversations, so it cannot run on a fresh database without them.
+-- The rest are unreferenced by any migration but are needed for the schema to
+-- match production.
 --
 -- Reconstructed from the live production schema (project igfwqgiscjpshxfsyunq)
 -- and deliberately trimmed back to the pre-2026-07-17 shape: columns, indexes
@@ -150,3 +156,242 @@ create index if not exists brain_events_thread_idx
   on public.brain_events using btree (provider_thread_id) where (provider_thread_id is not null);
 create unique index if not exists brain_events_unique_provider_message_idx
   on public.brain_events using btree (provider, provider_message_id) where (provider_message_id is not null);
+
+-- ============================================================================
+-- Remaining tables that no migration creates
+-- ============================================================================
+-- Same defect as the three above: these exist in production only because they
+-- were created in the SQL editor. Ordered by foreign-key dependency so the file
+-- applies cleanly to an empty database.
+--
+-- RLS is intentionally NOT enabled here: production has it disabled on these,
+-- and this file's job is to reproduce production, not to change it. Tightening
+-- them is separate work.
+-- ============================================================================
+
+create table if not exists public.accountants (
+  id uuid default gen_random_uuid() not null,
+  name text,
+  email text,
+  status text,
+  specialty text,
+  phone text,
+  notes text,
+  created_at timestamp with time zone default now() not null,
+  updated_at timestamp with time zone default now() not null,
+  partner_progress_notes text,
+  current_workload numeric,
+  constraint accountants_pkey primary key (id)
+);
+
+create table if not exists public.service_catalog (
+  id uuid default gen_random_uuid() not null,
+  airtable_id text,
+  service_code text,
+  service_name text,
+  category text,
+  tier text,
+  base_client_price numeric,
+  created_at timestamp with time zone default now() not null,
+  updated_at timestamp with time zone default now() not null,
+  notes text,
+  constraint service_catalog_pkey primary key (id),
+  constraint service_catalog_airtable_id_key unique (airtable_id),
+  constraint service_catalog_service_code_key unique (service_code)
+);
+
+create table if not exists public.case_drafts (
+  id uuid default gen_random_uuid() not null,
+  case_id uuid not null,
+  proposed_draft text not null,
+  internal_notes text,
+  is_approved boolean default false,
+  last_updated timestamp with time zone default now(),
+  constraint case_drafts_pkey primary key (id),
+  constraint case_drafts_case_id_key unique (case_id)
+);
+
+create table if not exists public.case_timeline (
+  id uuid default gen_random_uuid() not null,
+  case_id uuid not null,
+  event_type character varying not null,
+  sender character varying not null,
+  payload jsonb not null,
+  created_at timestamp with time zone default now(),
+  case_serial_id text,
+  source_message_id text,
+  constraint case_timeline_pkey primary key (id)
+);
+
+create table if not exists public.cases_directory (
+  id uuid default gen_random_uuid() not null,
+  case_serial_id character varying not null,
+  client_serial_id character varying not null,
+  status character varying default 'review_pending'::character varying,
+  created_at timestamp with time zone default now(),
+  constraint cases_directory_pkey primary key (id),
+  constraint cases_directory_case_serial_id_key unique (case_serial_id)
+);
+
+create table if not exists public.outbound_emails (
+  id uuid default gen_random_uuid() not null,
+  message_id text,
+  sender text not null,
+  recipient text not null,
+  subject text,
+  body text,
+  headers jsonb default '{}'::jsonb,
+  "timestamp" timestamp with time zone default now(),
+  is_lead boolean default false,
+  constraint outbound_emails_pkey primary key (id),
+  constraint outbound_emails_message_id_key unique (message_id)
+);
+
+create table if not exists public.messages (
+  id uuid default gen_random_uuid() not null,
+  airtable_id text,
+  message_id text,
+  client_id uuid,
+  direction text,
+  ts timestamp with time zone,
+  subject text,
+  body text,
+  thread_id text,
+  from_addr text,
+  to_addr text,
+  created_at timestamp with time zone default now() not null,
+  constraint messages_pkey primary key (id),
+  constraint messages_airtable_id_key unique (airtable_id),
+  constraint messages_client_id_fkey foreign key (client_id) references public.clients(id) on delete cascade
+);
+
+create table if not exists public.newsletter_subscribers (
+  id uuid default gen_random_uuid() not null,
+  email text not null,
+  full_name text,
+  status text default 'pending'::text not null,
+  source text,
+  client_id uuid,
+  emailoctopus_id text,
+  subscribed_at timestamp with time zone,
+  unsubscribed_at timestamp with time zone,
+  confirmed_at timestamp with time zone,
+  last_synced_at timestamp with time zone,
+  tags text[],
+  created_at timestamp with time zone default now() not null,
+  updated_at timestamp with time zone default now() not null,
+  constraint newsletter_subscribers_pkey primary key (id),
+  constraint newsletter_subscribers_email_key unique (email),
+  constraint newsletter_subscribers_client_id_fkey foreign key (client_id) references public.clients(id) on delete set null
+);
+
+create table if not exists public.jobs (
+  id uuid default gen_random_uuid() not null,
+  job_code text,
+  status text,
+  next_action_needed text,
+  client_id uuid,
+  accountant_id uuid,
+  service_id uuid,
+  date_sent date,
+  sla_deadline date,
+  accountant_fee numeric,
+  client_fee numeric,
+  admin_internal_notes text,
+  partner_progress_notes text,
+  client_visible_note text,
+  notes text,
+  created_at timestamp with time zone default now() not null,
+  updated_at timestamp with time zone default now() not null,
+  constraint jobs_pkey primary key (id),
+  constraint jobs_job_code_key unique (job_code),
+  constraint jobs_accountant_id_fkey foreign key (accountant_id) references public.accountants(id) on delete set null,
+  constraint jobs_client_id_fkey foreign key (client_id) references public.clients(id) on delete set null,
+  constraint jobs_service_id_fkey foreign key (service_id) references public.service_catalog(id) on delete set null
+);
+
+create table if not exists public.brain_ai_runs (
+  id uuid default gen_random_uuid() not null,
+  conversation_id uuid not null,
+  trigger_event_id uuid,
+  run_type text not null,
+  provider text default 'anthropic'::text not null,
+  model text not null,
+  prompt_version text not null,
+  status text default 'queued'::text not null,
+  input_tokens integer,
+  output_tokens integer,
+  cache_creation_input_tokens integer,
+  cache_read_input_tokens integer,
+  estimated_cost_usd numeric(12,6),
+  input_summary jsonb default '{}'::jsonb not null,
+  output jsonb,
+  error_message text,
+  started_at timestamp with time zone,
+  completed_at timestamp with time zone,
+  created_at timestamp with time zone default now() not null,
+  constraint brain_ai_runs_pkey primary key (id),
+  constraint brain_ai_runs_conversation_id_fkey foreign key (conversation_id) references public.brain_conversations(id) on delete cascade,
+  constraint brain_ai_runs_trigger_event_id_fkey foreign key (trigger_event_id) references public.brain_events(id) on delete set null,
+  constraint brain_ai_runs_run_type_check check (run_type = any (array['lead_import'::text, 'state_update'::text, 'strategy'::text, 'draft'::text, 'summary'::text])),
+  constraint brain_ai_runs_status_check check (status = any (array['queued'::text, 'running'::text, 'succeeded'::text, 'failed'::text, 'skipped'::text]))
+);
+
+create table if not exists public.brain_drafts (
+  id uuid default gen_random_uuid() not null,
+  conversation_id uuid not null,
+  ai_run_id uuid,
+  draft_type text not null,
+  subject text,
+  body_text text not null,
+  status text default 'pending_review'::text not null,
+  edited_subject text,
+  edited_body_text text,
+  approved_by uuid,
+  approved_at timestamp with time zone,
+  sent_at timestamp with time zone,
+  sent_event_id uuid,
+  created_at timestamp with time zone default now() not null,
+  updated_at timestamp with time zone default now() not null,
+  constraint brain_drafts_pkey primary key (id),
+  constraint brain_drafts_conversation_id_fkey foreign key (conversation_id) references public.brain_conversations(id) on delete cascade,
+  constraint brain_drafts_ai_run_id_fkey foreign key (ai_run_id) references public.brain_ai_runs(id) on delete set null,
+  constraint brain_drafts_sent_event_id_fkey foreign key (sent_event_id) references public.brain_events(id) on delete set null,
+  constraint brain_drafts_draft_type_check check (draft_type = any (array['customer_email'::text, 'partner_email'::text, 'internal_summary'::text])),
+  constraint brain_drafts_status_check check (status = any (array['pending_review'::text, 'approved'::text, 'rejected'::text, 'superseded'::text, 'sent'::text]))
+);
+
+create table if not exists public.brain_approval_tasks (
+  id uuid default gen_random_uuid() not null,
+  conversation_id uuid not null,
+  draft_id uuid,
+  task_type text default 'review_draft'::text not null,
+  status text default 'open'::text not null,
+  priority text default 'normal'::text not null,
+  title text not null,
+  instructions text,
+  assigned_to uuid,
+  resolved_by uuid,
+  resolved_at timestamp with time zone,
+  created_at timestamp with time zone default now() not null,
+  updated_at timestamp with time zone default now() not null,
+  constraint brain_approval_tasks_pkey primary key (id),
+  constraint brain_approval_tasks_conversation_id_fkey foreign key (conversation_id) references public.brain_conversations(id) on delete cascade,
+  constraint brain_approval_tasks_draft_id_fkey foreign key (draft_id) references public.brain_drafts(id) on delete cascade,
+  constraint brain_approval_tasks_priority_check check (priority = any (array['low'::text, 'normal'::text, 'high'::text, 'urgent'::text])),
+  constraint brain_approval_tasks_status_check check (status = any (array['open'::text, 'approved'::text, 'rejected'::text, 'completed'::text, 'cancelled'::text])),
+  constraint brain_approval_tasks_task_type_check check (task_type = any (array['review_draft'::text, 'route_conversation'::text, 'resolve_conflict'::text, 'request_partner_input'::text]))
+);
+
+create table if not exists public.brain_states (
+  conversation_id uuid not null,
+  version integer default 1 not null,
+  state jsonb default '{}'::jsonb not null,
+  last_processed_event_id uuid,
+  last_analysis_at timestamp with time zone,
+  created_at timestamp with time zone default now() not null,
+  updated_at timestamp with time zone default now() not null,
+  constraint brain_states_pkey primary key (conversation_id),
+  constraint brain_states_conversation_id_fkey foreign key (conversation_id) references public.brain_conversations(id) on delete cascade,
+  constraint brain_states_last_processed_event_id_fkey foreign key (last_processed_event_id) references public.brain_events(id) on delete set null
+);
