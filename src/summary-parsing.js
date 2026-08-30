@@ -83,7 +83,8 @@ export function extractSummaryText(rawText) {
         throw new Error("Model returned an empty summary.");
     }
 
-    const result = text.startsWith("{") ? summaryFromEnvelope(text) : text;
+    const envelopeAt = envelopeStart(text);
+    const result = envelopeAt === -1 ? text : summaryFromEnvelope(text.slice(envelopeAt));
 
     if (ENVELOPE_SHAPE.test(result)) {
         throw new Error(
@@ -93,6 +94,37 @@ export function extractSummaryText(rawText) {
         );
     }
     return result;
+}
+
+// How much text may sit in front of an envelope and still count as the model
+// introducing it ("Here is the requested summary:") rather than as a summary
+// that happens to quote one. A real case summary is far longer than this.
+const MAX_ENVELOPE_PREAMBLE = 200;
+
+/**
+ * Where the envelope starts in the response, or -1 if it is not one.
+ *
+ * A response that opens with a brace is an envelope whatever it contains, so a
+ * wrong-shaped object like {"draft": "..."} is refused downstream rather than
+ * stored as if it were markdown.
+ *
+ * An envelope can also arrive behind a short lead-in, and that is worth
+ * unwrapping. The lead-in has to stay short and unstructured though: a summary
+ * that quotes `{"summary": ...}` while describing this very bug would otherwise
+ * be replaced by the fragment it quotes, which is silent data loss and worse
+ * than the refusal it replaces.
+ */
+function envelopeStart(text) {
+    if (text.startsWith("{")) return 0;
+
+    const match = ENVELOPE_SHAPE.exec(text);
+    if (!match) return -1;
+
+    const preamble = text.slice(0, match.index);
+    const looksLikeProse =
+        preamble.length <= MAX_ENVELOPE_PREAMBLE && !/^\s*(#{1,6}\s|[-*+]\s|\d+\.\s)/m.test(preamble);
+
+    return looksLikeProse ? match.index : -1;
 }
 
 /**
