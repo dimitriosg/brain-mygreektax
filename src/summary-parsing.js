@@ -96,35 +96,28 @@ export function extractSummaryText(rawText) {
     return result;
 }
 
-// How much text may sit in front of an envelope and still count as the model
-// introducing it ("Here is the requested summary:") rather than as a summary
-// that happens to quote one. A real case summary is far longer than this.
-const MAX_ENVELOPE_PREAMBLE = 200;
-
 /**
  * Where the envelope starts in the response, or -1 if it is not one.
  *
- * A response that opens with a brace is an envelope whatever it contains, so a
- * wrong-shaped object like {"draft": "..."} is refused downstream rather than
- * stored as if it were markdown.
+ * Only a response that OPENS with a brace counts, and it counts whatever it
+ * contains, so a wrong-shaped object like {"draft": "..."} is refused
+ * downstream rather than stored as if it were markdown.
  *
- * An envelope can also arrive behind a short lead-in, and that is worth
- * unwrapping. The lead-in has to stay short and unstructured though: a summary
- * that quotes `{"summary": ...}` while describing this very bug would otherwise
- * be replaced by the fragment it quotes, which is silent data loss and worse
- * than the refusal it replaces.
+ * An envelope behind a lead-in ("Here is the requested summary:") is
+ * deliberately not unwrapped, and this position was reached by trying the
+ * alternative and finding it unsafe. Nothing distinguishes the model
+ * introducing its answer from a summary mentioning a stored value, because a
+ * real summary can be short and unstructured and still quote one:
+ *
+ *   The prior generation returned {"summary":"stale fragment"} after the AADE
+ *   rejection. Regenerate after the client uploads the receipt.
+ *
+ * Unwrapping that returns "stale fragment" and destroys the summary. Refusing
+ * a prose-prefixed envelope costs a 500 and a regenerate, with the previous
+ * summary intact; guessing costs the summary itself. The asymmetry decides it.
  */
 function envelopeStart(text) {
-    if (text.startsWith("{")) return 0;
-
-    const match = ENVELOPE_SHAPE.exec(text);
-    if (!match) return -1;
-
-    const preamble = text.slice(0, match.index);
-    const looksLikeProse =
-        preamble.length <= MAX_ENVELOPE_PREAMBLE && !/^\s*(#{1,6}\s|[-*+]\s|\d+\.\s)/m.test(preamble);
-
-    return looksLikeProse ? match.index : -1;
+    return text.startsWith("{") ? 0 : -1;
 }
 
 /**

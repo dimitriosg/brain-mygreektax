@@ -80,24 +80,27 @@ test("a truncated envelope throws rather than being stored raw", () => {
     assert.throws(() => extractSummaryText(truncated), /does not parse/);
 });
 
-test("a complete envelope behind a short lead-in yields its summary", () => {
-    // The model introducing its own answer. The envelope is valid and usable,
-    // so refusing it loses a good summary for no benefit.
-    const raw = "Here is the requested summary:\n\n" + JSON.stringify({ summary: MARKDOWN });
-    assert.equal(extractSummaryText(raw), MARKDOWN);
+test("a summary that quotes an envelope is never replaced by the fragment", () => {
+    // Why only a LEADING brace counts as an envelope. Unwrapping one found
+    // further into the text swaps a real summary for the snippet it quotes,
+    // and no preamble test separates the two: this one is short, has no
+    // heading or list marker, and is an entirely ordinary thing to write.
+    const quotingInProse =
+        'The prior generation returned {"summary":"stale fragment"} after the AADE ' +
+        "rejection. Regenerate after the client uploads the receipt.";
+    assert.throws(() => extractSummaryText(quotingInProse), /Refusing to store it/);
+
+    const quotingInMarkdown =
+        '## Case summary\n\n- The stored value was {"summary": "stale fragment"} which broke the tab.';
+    assert.throws(() => extractSummaryText(quotingInMarkdown), /Refusing to store it/);
 });
 
-test("markdown that quotes an envelope is not replaced by the fragment", () => {
-    // The trap on the other side of the previous test. Unwrapping any envelope
-    // found anywhere would silently swap a real summary for the snippet it
-    // quotes, which is data loss rather than a refusal.
-    const quoting =
-        '## Case summary\n\n- The stored value was {"summary": "stale fragment"} which broke the tab.\n- Refile pending.';
-    assert.throws(() => extractSummaryText(quoting), /Refusing to store it/);
-
-    // Long prose with no markdown markers is caught by the length limit alone.
-    const longProse = "x".repeat(250) + ' {"summary": "stale fragment"}';
-    assert.throws(() => extractSummaryText(longProse), /Refusing to store it/);
+test("a complete envelope behind a lead-in is refused, not unwrapped", () => {
+    // The cost of the rule above: a usable envelope introduced by prose is
+    // thrown away. That is a 500 and a regenerate with the previous summary
+    // intact, which is the cheaper of the two mistakes.
+    const raw = "Here is the requested summary:\n\n" + JSON.stringify({ summary: MARKDOWN });
+    assert.throws(() => extractSummaryText(raw), /Refusing to store it/);
 });
 
 test("a wrong-shaped object is still refused, never stored as markdown", () => {
