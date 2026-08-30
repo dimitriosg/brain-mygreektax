@@ -56,6 +56,14 @@ test("trailing chatter containing braces does not swallow a good envelope", () =
         JSON.stringify({ summary: MARKDOWN }) +
         '\n\nNote: the portal payload uses `{"case_id": "..."}`';
     assert.equal(extractSummaryText(raw), MARKDOWN);
+
+    // A second complete object after the envelope, rather than braces inside
+    // prose. The first one is the summary and the scan must stop there.
+    const twoObjects =
+        JSON.stringify({ summary: MARKDOWN }) +
+        "\nExample: " +
+        JSON.stringify({ next: "confirm with partner" });
+    assert.equal(extractSummaryText(twoObjects), MARKDOWN);
 });
 
 test("braces inside the summary string do not end the envelope early", () => {
