@@ -44,7 +44,7 @@ jobs:
 
     - name: Package deployment archive
       working-directory: src
-      run: zip -r ../deployment.zip index.js package.json node_modules
+      run: zip -r ../deployment.zip index.js summary-parsing.js package.json node_modules
 
     # OIDC, same role as production. The role's policy names both functions,
     # and this workflow's only AWS call names the staging one, so the branch

@@ -1,5 +1,6 @@
 import { BedrockRuntimeClient, ConverseCommand } from "@aws-sdk/client-bedrock-runtime";
 import { createClient } from "@supabase/supabase-js";
+import { asText, extractSummaryText } from "./summary-parsing.js";
 
 const bedrock = new BedrockRuntimeClient({ region: "eu-north-1" });
 
@@ -25,12 +26,6 @@ function getSupabase() {
 
     cachedSupabase = createClient(url, key);
     return { client: cachedSupabase };
-}
-
-function asText(value) {
-    if (typeof value === "string") return value.trim();
-    if (value === null || value === undefined) return "";
-    return String(value).trim();
 }
 
 function cleanModelJson(rawText) {
@@ -433,11 +428,7 @@ Style:
 - Internal use, so noting uncertainty, open questions, and verification needs is welcome.
 - Do not invent facts, deadlines, prices, or legal conclusions.
 
-Return ONLY valid JSON with no markdown fences and no text outside the JSON object:
-
-{
-  "summary": "the internal case summary as markdown text"
-}`;
+Return the summary as plain markdown. No JSON, no wrapper object, no code fences, and no preamble before it. Start directly with the first line of the summary.`;
 
 export const handler = async (event) => {
     console.log("Raw API Gateway Event Received:", JSON.stringify(event));
@@ -581,17 +572,20 @@ export const handler = async (event) => {
                 throw new Error("No textual output returned from Bedrock for summary.");
             }
 
-            let summaryText;
-            try {
-                summaryText = asText(cleanModelJson(summaryRaw).summary);
-            } catch {
-                // Model did not return clean JSON: fall back to the raw text.
-                summaryText = asText(summaryRaw);
+            // Truncation is the failure this whole path is guarding against, and
+            // it is knowable rather than inferred. The summary is now markdown,
+            // so a cut one is short rather than unreadable and is worth storing,
+            // but the operator should be able to see why it stops mid sentence.
+            if (summaryResponse.stopReason === "max_tokens") {
+                console.warn(
+                    `Summary for case ${caseId} hit maxTokens and is truncated. ` +
+                        "Stored as far as it got; raise maxTokens if this recurs.",
+                );
             }
 
-            if (!summaryText) {
-                throw new Error("Summary text was empty.");
-            }
+            // Throws rather than storing anything it could not read. The outer
+            // handler turns that into a 500 and the existing row is untouched.
+            const summaryText = extractSummaryText(summaryRaw);
 
             const { error: summaryUpsertError } = await supabase
                 .from("case_summaries")

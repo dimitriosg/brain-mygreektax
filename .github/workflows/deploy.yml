@@ -34,7 +34,7 @@ jobs:
 
     - name: Package deployment archive
       working-directory: src
-      run: zip -r ../deployment.zip index.js package.json node_modules
+      run: zip -r ../deployment.zip index.js summary-parsing.js package.json node_modules
 
     # OIDC: no long-lived keys. GitHub mints a token scoped to this repo, AWS
     # trades it for credentials that expire when the run ends. The role is
