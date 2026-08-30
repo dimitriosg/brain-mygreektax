@@ -109,10 +109,27 @@ test("a wrong-shaped object is still refused, never stored as markdown", () => {
 
     // And the same object introduced by a line of prose. ENVELOPE_SHAPE does
     // not match it, because its first key is not "summary", so without the
-    // ends-with-an-object check this whole response was stored verbatim.
+    // standalone-block check this whole response was stored verbatim.
     assert.throws(
         () => extractSummaryText('Here is the requested result:\n\n{"draft":"wrong shape"}'),
-        /introduced by prose/,
+        /as a block/,
+    );
+
+    // The same again with a closing remark after it. A positional test ("the
+    // object is the last thing in the response") missed this; the block test
+    // does not care where the object sits.
+    assert.throws(
+        () =>
+            extractSummaryText(
+                'Here is the requested result:\n\n{"draft":"wrong shape"}\n\nLet me know if you need changes.',
+            ),
+        /as a block/,
+    );
+
+    // Indented, which is how a model often presents a result.
+    assert.throws(
+        () => extractSummaryText('Result:\n\n    {"draft":"wrong shape"}\n\nAnything else?'),
+        /as a block/,
     );
 });
 

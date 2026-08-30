@@ -85,9 +85,9 @@ export function extractSummaryText(rawText) {
 
     const envelopeAt = envelopeStart(text);
 
-    if (envelopeAt === -1 && endsWithJsonObject(text)) {
+    if (envelopeAt === -1 && hasStandaloneJsonObject(text)) {
         throw new Error(
-            "Model returned a JSON object introduced by prose rather than a markdown summary. " +
+            "Model returned a JSON object as a block rather than a markdown summary. " +
                 "Refusing to store it; the previous summary is left unchanged.",
         );
     }
@@ -128,27 +128,41 @@ function envelopeStart(text) {
     return text.startsWith("{") ? 0 : -1;
 }
 
-/**
- * Whether the response finishes with a complete JSON object.
- *
- * This exists to catch model output that is a JSON object introduced by a line
- * of prose, including a wrong-shaped one like {"draft": "..."} that
- * ENVELOPE_SHAPE does not match because its first key is not "summary".
- *
- * Note what it does NOT do: it never selects or returns the object it finds.
- * Every earlier attempt to decide which nested object was the "real" one
- * destroyed summaries, so the only thing this decides is whether to refuse.
- * The failure direction that leaves is a summary genuinely ending in a JSON
- * object, which is refused and regenerated, with the previous value intact.
- * Prose after the object, which is what a summary quoting JSON looks like,
- * fails this and stays markdown.
- */
-function endsWithJsonObject(text) {
-    if (!text.endsWith("}")) return false;
+// A line that begins a JSON object, ignoring leading indentation.
+const LINE_INITIAL_BRACE = /^[ \t]*\{/gm;
 
-    for (let open = text.indexOf("{"); open !== -1; open = text.indexOf("{", open + 1)) {
+/**
+ * Whether a complete JSON object stands alone as its own block.
+ *
+ * This catches model output that is a JSON object presented as the answer,
+ * including a wrong-shaped one like {"draft": "..."} that ENVELOPE_SHAPE does
+ * not match because its first key is not "summary", and including the case
+ * where the model adds a closing remark after it.
+ *
+ * The test is structural rather than positional, which is what a first attempt
+ * at this got wrong: "the object is the last thing in the response" is defeated
+ * by any trailing chatter, while "the object occupies its own lines" holds
+ * wherever it sits. What separates the two shapes is that a summary quoting a
+ * payload does it inside a sentence, and a model presenting a result puts it on
+ * its own line.
+ *
+ * Note what this does NOT do: it never selects or returns the object it finds.
+ * Every attempt to decide which nested object was the "real" summary destroyed
+ * summaries, so the only thing decided here is whether to refuse. The failure
+ * direction that leaves is a summary that legitimately displays a payload as a
+ * block, which is refused and regenerated with the previous value intact.
+ */
+function hasStandaloneJsonObject(text) {
+    LINE_INITIAL_BRACE.lastIndex = 0;
+
+    for (let match; (match = LINE_INITIAL_BRACE.exec(text)) !== null; ) {
+        const open = match.index + match[0].length - 1;
         const end = firstObjectEnd(text.slice(open));
-        if (end !== -1 && open + end === text.length - 1) return true;
+        if (end === -1) continue;
+
+        // Nothing but blank space to the end of that line, so the object is a
+        // block rather than a phrase inside a sentence.
+        if (/^[ \t]*(\r?\n|$)/.test(text.slice(open + end + 1))) return true;
     }
     return false;
 }
