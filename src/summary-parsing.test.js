@@ -106,6 +106,29 @@ test("a complete envelope behind a lead-in is refused, not unwrapped", () => {
 test("a wrong-shaped object is still refused, never stored as markdown", () => {
     // The reason the leading-brace trigger survives alongside the shape match.
     assert.throws(() => extractSummaryText('{"draft": "wrong shape"}'), /no usable summary/);
+
+    // And the same object introduced by a line of prose. ENVELOPE_SHAPE does
+    // not match it, because its first key is not "summary", so without the
+    // ends-with-an-object check this whole response was stored verbatim.
+    assert.throws(
+        () => extractSummaryText('Here is the requested result:\n\n{"draft":"wrong shape"}'),
+        /introduced by prose/,
+    );
+});
+
+test("a summary that merely mentions JSON is still markdown", () => {
+    // The other side of the ends-with-an-object check. What separates these
+    // from the case above is that the response continues after the object,
+    // which is what a summary quoting a payload looks like and what model
+    // output terminating in JSON does not.
+    const mentions = [
+        '## Case summary\n\nThe payload was `{"afm": "000000000"}` which AADE rejected.',
+        'AADE returned {"error":"invalid"} twice, so the filing is still open.',
+        "## Case summary\n\n- Awaiting the receipt\n- Refile once it arrives",
+    ];
+    for (const text of mentions) {
+        assert.equal(extractSummaryText(text), text);
+    }
 });
 
 test("a truncated envelope behind a preamble also throws", () => {

@@ -84,6 +84,14 @@ export function extractSummaryText(rawText) {
     }
 
     const envelopeAt = envelopeStart(text);
+
+    if (envelopeAt === -1 && endsWithJsonObject(text)) {
+        throw new Error(
+            "Model returned a JSON object introduced by prose rather than a markdown summary. " +
+                "Refusing to store it; the previous summary is left unchanged.",
+        );
+    }
+
     const result = envelopeAt === -1 ? text : summaryFromEnvelope(text.slice(envelopeAt));
 
     if (ENVELOPE_SHAPE.test(result)) {
@@ -118,6 +126,31 @@ export function extractSummaryText(rawText) {
  */
 function envelopeStart(text) {
     return text.startsWith("{") ? 0 : -1;
+}
+
+/**
+ * Whether the response finishes with a complete JSON object.
+ *
+ * This exists to catch model output that is a JSON object introduced by a line
+ * of prose, including a wrong-shaped one like {"draft": "..."} that
+ * ENVELOPE_SHAPE does not match because its first key is not "summary".
+ *
+ * Note what it does NOT do: it never selects or returns the object it finds.
+ * Every earlier attempt to decide which nested object was the "real" one
+ * destroyed summaries, so the only thing this decides is whether to refuse.
+ * The failure direction that leaves is a summary genuinely ending in a JSON
+ * object, which is refused and regenerated, with the previous value intact.
+ * Prose after the object, which is what a summary quoting JSON looks like,
+ * fails this and stays markdown.
+ */
+function endsWithJsonObject(text) {
+    if (!text.endsWith("}")) return false;
+
+    for (let open = text.indexOf("{"); open !== -1; open = text.indexOf("{", open + 1)) {
+        const end = firstObjectEnd(text.slice(open));
+        if (end !== -1 && open + end === text.length - 1) return true;
+    }
+    return false;
 }
 
 /**
