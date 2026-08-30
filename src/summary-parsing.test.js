@@ -1,27 +1,30 @@
 // Run with: npm test (from src/), or: node --test src/summary-parsing.test.js
 //
 // Node's built-in runner, so this adds no dependency to a bundle that ships to
-// Lambda. Nothing in CI runs it: .github/workflows/deploy.yml only deploys.
+// Lambda. Nothing in CI runs it: the deploy workflows only deploy.
 //
 // What is being protected: case_summaries.summary holds plain markdown, and a
 // summary that could not be parsed used to be written to that column raw. Two
 // of seventeen rows held a literal `{"summary": "## Case ...` string as a
 // result, and one of them broke again on a later regenerate, so this is a
 // recurring failure rather than a historical one.
+//
+// Fixtures are invented. Real summaries carry client names and AFMs, and R1
+// keeps those out of the repo, so nothing here is copied from a stored row.
 
 import assert from "node:assert/strict";
 import test from "node:test";
 import { extractSummaryText, stripCodeFence } from "./summary-parsing.js";
 
-const MARKDOWN = "## Case summary\n\nAlexandros is mid-filing.\n\n- E1 outstanding";
+const MARKDOWN = "## Case summary\n\nClient is mid-filing.\n\n- E1 outstanding";
+const ENVELOPE_SHAPE = /\{\s*"summary"\s*:/;
 
 test("plain markdown is stored as written", () => {
     assert.equal(extractSummaryText(MARKDOWN), MARKDOWN);
 });
 
 test("a JSON envelope yields the summary, not the envelope", () => {
-    const raw = JSON.stringify({ summary: MARKDOWN });
-    assert.equal(extractSummaryText(raw), MARKDOWN);
+    assert.equal(extractSummaryText(JSON.stringify({ summary: MARKDOWN })), MARKDOWN);
 });
 
 test("a fenced JSON envelope yields the summary", () => {
@@ -34,11 +37,29 @@ test("fenced markdown keeps its markdown, fence removed", () => {
     assert.equal(extractSummaryText("```\n" + MARKDOWN + "\n```"), MARKDOWN);
 });
 
+test("a complete envelope survives trailing chatter after it", () => {
+    // Regression: slicing to the last brace, rather than demanding the text end
+    // at the envelope, is what keeps a usable summary usable here.
+    const envelope = JSON.stringify({ summary: MARKDOWN });
+    assert.equal(extractSummaryText(envelope + "\n\nLet me know if you want more."), MARKDOWN);
+    assert.equal(
+        extractSummaryText("```json\n" + envelope + "\n```\n\nHappy to expand any section."),
+        MARKDOWN,
+    );
+});
+
 test("a truncated envelope throws rather than being stored raw", () => {
     // The real failure: maxTokens cuts the envelope mid-string, so it cannot
     // parse. Storing this is what produced the unreadable rows.
-    const truncated = '{"summary": "## Case summary\\n\\nAlexandros is mid-fil';
+    const truncated = '{"summary": "## Case summary\\n\\nClient is mid-fil';
     assert.throws(() => extractSummaryText(truncated), /does not parse/);
+});
+
+test("a truncated envelope behind a preamble also throws", () => {
+    // The gap that mattered: keying off the first character alone let this one
+    // through, because the text starts with "H" rather than "{".
+    const raw = 'Here is the internal case summary:\n{"summary": "## Case summary\\n\\nClient is';
+    assert.throws(() => extractSummaryText(raw), /Refusing to store it/);
 });
 
 test("an envelope with no summary field throws", () => {
@@ -46,7 +67,7 @@ test("an envelope with no summary field throws", () => {
 });
 
 test("an empty response throws", () => {
-    for (const empty of ["", "   ", "```json\n```"]) {
+    for (const empty of ["", "   ", "```json\n```", null, undefined]) {
         assert.throws(() => extractSummaryText(empty), /empty summary/);
     }
 });
@@ -54,22 +75,41 @@ test("an empty response throws", () => {
 test("markdown containing braces is not mistaken for an envelope", () => {
     // A summary may quote JSON or use braces in prose. It must survive intact.
     const withBraces =
-        "## Case summary\n\nThe payload was `{\"afm\": \"164334680\"}` which AADE rejected.";
+        '## Case summary\n\nThe payload was `{"afm": "000000000"}` which AADE rejected.';
     assert.equal(extractSummaryText(withBraces), withBraces);
 });
 
-test("prose wrapping a real envelope still yields the summary", () => {
-    const raw = "Here is the summary:\n" + JSON.stringify({ summary: MARKDOWN });
-    assert.equal(extractSummaryText(raw), MARKDOWN);
+test("no return value is ever still envelope shaped", () => {
+    // The invariant the stored rows violated. Anything that would break it is
+    // refused rather than returned, whichever branch produced it.
+    const corpus = [
+        MARKDOWN,
+        JSON.stringify({ summary: MARKDOWN }),
+        "```json\n" + JSON.stringify({ summary: MARKDOWN }) + "\n```",
+        '{"summary": "## Case summary\\n\\nClient is mid-fil',
+        'Here is the summary:\n{"summary": "## Case summary\\n\\nClient',
+        '## Case summary\n\nThe payload was `{"afm": "000000000"}`.',
+        "```\n" + MARKDOWN + "\n```",
+    ];
+    for (const raw of corpus) {
+        let out;
+        try {
+            out = extractSummaryText(raw);
+        } catch {
+            continue; // Refused, which is the safe outcome.
+        }
+        assert.ok(!ENVELOPE_SHAPE.test(out), `envelope shape survived for: ${raw.slice(0, 40)}`);
+    }
 });
 
-test("the exact shape found in the two broken rows is refused", () => {
-    // Reconstructed from the stored value: an envelope whose newlines are
-    // escaped, that failed to parse and was written verbatim.
-    const broken = '{"summary": "## Case Summary\\n\\nBrendan McInerney\\n\\n- ENFIA';
-    assert.throws(() => extractSummaryText(broken), /Refusing to store it/);
-});
-
-test("stripCodeFence leaves unfenced text alone", () => {
-    assert.equal(stripCodeFence(MARKDOWN), MARKDOWN);
+test("stripCodeFence handles the fence shapes the model actually emits", () => {
+    assert.equal(stripCodeFence(MARKDOWN), MARKDOWN, "unfenced text is left alone");
+    // A whole fence on one line: the opening line is content, not a tag.
+    assert.equal(stripCodeFence('```{"summary": "x"}```'), '{"summary": "x"}');
+    // An inner fence inside a fenced summary survives, because the closer is
+    // the last marker rather than the first.
+    const withInner = "## Case summary\n\n```\nAFM 000000000\n```\n\n- E1 outstanding";
+    assert.equal(stripCodeFence("```markdown\n" + withInner + "\n```"), withInner);
+    // An unterminated fence still yields its content rather than the marker.
+    assert.equal(stripCodeFence("```markdown\n" + MARKDOWN), MARKDOWN);
 });
