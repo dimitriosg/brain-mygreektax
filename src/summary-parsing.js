@@ -87,13 +87,50 @@ export function extractSummaryText(rawText) {
     return result;
 }
 
+/**
+ * The index of the brace closing the object that starts at position 0, or -1
+ * if it never closes.
+ *
+ * Counting braces is not enough on its own, because a summary is prose and
+ * prose contains braces. They have to be ignored inside JSON strings, and an
+ * escaped quote inside such a string must not be read as ending it.
+ */
+function firstObjectEnd(text) {
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+
+    for (let i = 0; i < text.length; i += 1) {
+        const char = text[i];
+
+        if (inString) {
+            if (escaped) escaped = false;
+            else if (char === "\\") escaped = true;
+            else if (char === '"') inString = false;
+            continue;
+        }
+
+        if (char === '"') inString = true;
+        else if (char === "{") depth += 1;
+        else if (char === "}") {
+            depth -= 1;
+            if (depth === 0) return i;
+        }
+    }
+
+    return -1;
+}
+
 function summaryFromEnvelope(text) {
-    // Slice to the last brace so trailing text after a complete envelope does
-    // not fail an otherwise good summary.
-    const lastBrace = text.lastIndexOf("}");
+    // End at the close of the first complete object rather than the last brace
+    // in the response. Trailing chatter after a good envelope may itself
+    // contain braces, and taking the last one swallows it and fails a summary
+    // that was perfectly usable. A -1 here means the object never closed,
+    // which is what truncation looks like, and JSON.parse reports it.
+    const objectEnd = firstObjectEnd(text);
     let parsed;
     try {
-        parsed = JSON.parse(lastBrace === -1 ? text : text.slice(0, lastBrace + 1));
+        parsed = JSON.parse(objectEnd === -1 ? text : text.slice(0, objectEnd + 1));
     } catch (parseError) {
         throw new Error(
             `Model returned a JSON summary envelope that does not parse (${parseError.message}). ` +

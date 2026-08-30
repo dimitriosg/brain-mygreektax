@@ -48,6 +48,23 @@ test("a complete envelope survives trailing chatter after it", () => {
     );
 });
 
+test("trailing chatter containing braces does not swallow a good envelope", () => {
+    // Ending at the last brace in the response rather than at the close of the
+    // first object failed this, and prose about a payload is exactly the kind
+    // of trailing note that carries braces.
+    const raw =
+        JSON.stringify({ summary: MARKDOWN }) +
+        '\n\nNote: the portal payload uses `{"case_id": "..."}`';
+    assert.equal(extractSummaryText(raw), MARKDOWN);
+});
+
+test("braces inside the summary string do not end the envelope early", () => {
+    // The scan has to ignore braces inside JSON strings, and an escaped quote
+    // inside one must not be read as closing it.
+    const tricky = '## Case summary\n\nAADE rejected `{"afm": "000000000"}` and the reply said "no".';
+    assert.equal(extractSummaryText(JSON.stringify({ summary: tricky })), tricky);
+});
+
 test("a truncated envelope throws rather than being stored raw", () => {
     // The real failure: maxTokens cuts the envelope mid-string, so it cannot
     // parse. Storing this is what produced the unreadable rows.
