@@ -1,8 +1,17 @@
 # CodeRabbit configuration.
 #
-# This file is inert until the CodeRabbit GitHub App is installed on the repo,
-# which is a one time click at https://github.com/apps/coderabbitai and cannot
-# be done from a commit. Once installed, this takes effect on the next PR.
+# The app is already installed on this repo and reads this file. What it does
+# NOT do is review anything on its own: CodeRabbit skips automatic reviews on
+# repositories with fewer than 10 stars, which this one is, so auto_review
+# below is honoured only for runs that are asked for. That is a limit of the
+# account rather than of this file, and there is no setting here that lifts it.
+#
+# To get a review, comment on the pull request:
+#
+#     @coderabbitai review
+#
+# or tick the "Trigger review" checkbox in the comment CodeRabbit leaves when
+# a PR is opened. Either one applies everything below.
 #
 # The point of the path_instructions below is that the rules in CLAUDE.md are
 # mostly invisible to a generic reviewer. R1 in particular is a rule an
@@ -20,6 +29,9 @@ reviews:
   poem: false
 
   auto_review:
+    # Kept on so that a manually triggered review, and any future run once the
+    # star threshold is met, uses these settings rather than defaults. It does
+    # not by itself cause a review to happen: see the note at the top.
     enabled: true
     # Work here is opened as a draft on purpose, because merging this repo
     # deploys it. Reviewing drafts is the whole point.
