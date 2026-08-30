@@ -1,5 +1,6 @@
 import { BedrockRuntimeClient, ConverseCommand } from "@aws-sdk/client-bedrock-runtime";
 import { createClient } from "@supabase/supabase-js";
+import { asText, extractSummaryText } from "./summary-parsing.js";
 
 const bedrock = new BedrockRuntimeClient({ region: "eu-north-1" });
 
@@ -25,12 +26,6 @@ function getSupabase() {
 
     cachedSupabase = createClient(url, key);
     return { client: cachedSupabase };
-}
-
-function asText(value) {
-    if (typeof value === "string") return value.trim();
-    if (value === null || value === undefined) return "";
-    return String(value).trim();
 }
 
 function cleanModelJson(rawText) {
@@ -581,17 +576,9 @@ export const handler = async (event) => {
                 throw new Error("No textual output returned from Bedrock for summary.");
             }
 
-            let summaryText;
-            try {
-                summaryText = asText(cleanModelJson(summaryRaw).summary);
-            } catch {
-                // Model did not return clean JSON: fall back to the raw text.
-                summaryText = asText(summaryRaw);
-            }
-
-            if (!summaryText) {
-                throw new Error("Summary text was empty.");
-            }
+            // Throws rather than storing anything it could not read. The outer
+            // handler turns that into a 500 and the existing row is untouched.
+            const summaryText = extractSummaryText(summaryRaw);
 
             const { error: summaryUpsertError } = await supabase
                 .from("case_summaries")
