@@ -1,0 +1,83 @@
+# CodeRabbit configuration.
+#
+# This file is inert until the CodeRabbit GitHub App is installed on the repo,
+# which is a one time click at https://github.com/apps/coderabbitai and cannot
+# be done from a commit. Once installed, this takes effect on the next PR.
+#
+# The point of the path_instructions below is that the rules in CLAUDE.md are
+# mostly invisible to a generic reviewer. R1 in particular is a rule an
+# automated reviewer can enforce well and a human skims past: a client name or
+# an AFM in a test fixture reads as ordinary sample data unless you know it is
+# forbidden here.
+
+language: en-US
+
+reviews:
+  profile: chill
+  request_changes_workflow: false
+  high_level_summary: true
+  review_status: true
+  poem: false
+
+  auto_review:
+    enabled: true
+    # Work here is opened as a draft on purpose, because merging this repo
+    # deploys it. Reviewing drafts is the whole point.
+    drafts: true
+    base_branches:
+      - main
+      - staging
+
+  path_filters:
+    - "!node_modules/**"
+    - "!**/package-lock.json"
+    - "!inbox/**"
+
+  path_instructions:
+    - path: "wiki/**"
+      instructions: >-
+        R1: no client PII may appear here. Flag any client name, AFM, email
+        address, phone number, home address, TAXISnet or myAADE credential, or
+        IBAN. Partner and company names are allowed, since they are business
+        counterparties rather than clients. R4: every factual tax claim needs a
+        source (an AADE page, a law or circular, a treaty article, or a dated
+        partner confirmation), and every page needs a status line reading
+        either CANONICAL or DRAFT. Flag a page that has neither. R5: flag any
+        em dash or en dash.
+
+    - path: "cases/**"
+      instructions: >-
+        R1: case files describe people by situation only, meaning nationality,
+        residency status, income types and family situation. Flag anything that
+        identifies an individual, including names, AFMs, email addresses and
+        property addresses. R5: flag any em dash or en dash.
+
+    - path: "pricing/**"
+      instructions: >-
+        R2, the pricing firewall. This directory is for internal margin
+        analysis and client facing quotes only. Flag any retail price, margin
+        or client fee total that appears in text addressed to a partner,
+        accountant or accountant candidate. R1 applies here too: no client
+        identifiers.
+
+    - path: "src/**"
+      instructions: >-
+        This is the Lambda that reaches production by merging to main, so
+        weigh correctness accordingly. Both deploy workflows package an
+        explicit file list rather than the whole directory, so flag any new
+        module under src/ that is imported by index.js but missing from the
+        zip line in .github/workflows/deploy.yml and deploy-staging.yml: the
+        result is a module load failure on every invocation, not a partial
+        outage. Prompts that instruct the model to return JSON must have their
+        parse path checked for what happens on malformed or truncated output.
+        Storing an unparsed model response into a column that holds rendered
+        text is a bug, not a fallback.
+
+    - path: ".github/workflows/**"
+      instructions: >-
+        A push to main here deploys to AWS Lambda with no manual gate. Flag
+        anything that changes what is packaged, what is deployed, or which
+        credentials are used.
+
+chat:
+  auto_reply: true
