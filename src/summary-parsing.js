@@ -6,6 +6,14 @@
 // to the zip line in .github/workflows/deploy.yml and deploy-staging.yml too,
 // because that list is explicit and a missing file breaks every invocation.
 
+/**
+ * A value as trimmed display text, coercing whatever it is given.
+ *
+ * Used across the timeline formatters, where a number or a null in a database
+ * column should read as text rather than crash the prompt. Coercion is the
+ * point here, which is exactly why the summary field does not go through it:
+ * see summaryFromEnvelope.
+ */
 export function asText(value) {
     if (typeof value === "string") return value.trim();
     if (value === null || value === undefined) return "";
@@ -121,6 +129,13 @@ function firstObjectEnd(text) {
     return -1;
 }
 
+/**
+ * The summary carried by a response that opens with a JSON object.
+ *
+ * Throws rather than returning anything it could not read cleanly, because the
+ * caller writes the result over an existing summary and a bad write is worse
+ * than no write.
+ */
 function summaryFromEnvelope(text) {
     // End at the close of the first complete object rather than the last brace
     // in the response. Trailing chatter after a good envelope may itself
@@ -138,10 +153,14 @@ function summaryFromEnvelope(text) {
         );
     }
 
-    const summary = asText(parsed?.summary);
+    // Deliberately not asText() here. That coerces, and coercing this field is
+    // how {"summary": {...}} becomes the literal string "[object Object]"
+    // written over a summary that was fine. A summary is text or it is nothing.
+    const summary = typeof parsed?.summary === "string" ? parsed.summary.trim() : "";
     if (!summary) {
+        const found = parsed?.summary === undefined ? "absent" : typeof parsed.summary;
         throw new Error(
-            "Model returned a JSON object with no usable summary field. " +
+            `Model returned a JSON object with no usable summary string (summary was ${found}). ` +
                 "Refusing to store it; the previous summary is left unchanged.",
         );
     }

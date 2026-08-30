@@ -83,6 +83,26 @@ test("an envelope with no summary field throws", () => {
     assert.throws(() => extractSummaryText('{"draft": "wrong shape"}'), /no usable summary/);
 });
 
+test("a summary field that is not a string is refused, never coerced", () => {
+    // Coercion here is the corruption. {"summary": {...}} stringifies to the
+    // literal "[object Object]", which is truthy, non-empty, not envelope
+    // shaped, and would have been written straight over a working summary.
+    const notStrings = [
+        { summary: { text: "## Case summary" } },
+        { summary: ["## Case summary", "- E1 outstanding"] },
+        { summary: 12345 },
+        { summary: true },
+        { summary: null },
+    ];
+    for (const envelope of notStrings) {
+        assert.throws(
+            () => extractSummaryText(JSON.stringify(envelope)),
+            /no usable summary string/,
+            `coerced instead of refusing: ${JSON.stringify(envelope)}`,
+        );
+    }
+});
+
 test("an empty response throws", () => {
     for (const empty of ["", "   ", "```json\n```", null, undefined]) {
         assert.throws(() => extractSummaryText(empty), /empty summary/);
